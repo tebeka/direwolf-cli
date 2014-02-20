@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	//	baseURL = "https://integration-test.herokai.com/api"
-	baseURL = "https://direwolf-brainard.herokuapp.com/api"
+	defaultHost = "integration-test.herokai.com"
 )
 
 // Command line options
+var direwolfHost = flag.String("direwolfHost", defaultHost, "direwolf host")
 var apiKey = flag.String("apiKey", "", "api key to use")
 var listClouds = flag.Bool("listClouds", false, "list clouds and exit")
 var domain = flag.String("domain", "", "cloud domain")
@@ -41,7 +41,7 @@ func die(format string, args ...interface{}) {
 
 // apiCall calls the HTTP api (setting auth), returns the response
 func apiCall(method, path string, payload []byte) (*http.Response, error) {
-	url := fmt.Sprintf("%s/%s", baseURL, path)
+	url := fmt.Sprintf("https://%s/api/%s", *direwolfHost, path)
 	var rdr io.Reader
 
 	if payload == nil {
