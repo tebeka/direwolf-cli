@@ -201,7 +201,7 @@ func main() {
 
 	for {
 		status, err = runStatus(status.Id)
-		fmt.Printf("state: %s, summary: %+v\n", status.State, status.Summary)
+		fmt.Printf("state: %s, summary: %+v\r", status.State, status.Summary)
 		if status.End != nil {
 			break
 		}
