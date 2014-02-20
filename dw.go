@@ -17,7 +17,7 @@ const (
 
 // Command line options
 var direwolfHost = flag.String("direwolfHost", defaultHost, "direwolf host")
-var apiKey = flag.String("apiKey", "", "api key to use")
+var apiKey = flag.String("apiKey", os.Getenv("DW_API_KEY"), "api key to use (or DW_API_KEY)")
 var listClouds = flag.Bool("listClouds", false, "list clouds and exit")
 var domain = flag.String("domain", "", "cloud domain")
 var region = flag.String("region", "", "cloud region")
@@ -41,6 +41,7 @@ func die(format string, args ...interface{}) {
 
 // apiCall calls the HTTP api (setting auth), returns the response
 func apiCall(method, path string, payload []byte) (*http.Response, error) {
+	// FIXME: https won't work with localhost
 	url := fmt.Sprintf("https://%s/api/%s", *direwolfHost, path)
 	var rdr io.Reader
 
@@ -91,6 +92,7 @@ func findClouldId(domain, region string, clouds []Cloud) string {
 	return ""
 }
 
+// Runs JSON payload
 // FIXME: There's probably a better way to do this
 type RunsCloud struct {
 	Id string `json:"id"`
@@ -104,6 +106,7 @@ type RunsPayload struct {
 	RunsSuite `json:"suite"`
 }
 
+// encodeRunsPayload creates JSON object for POST /runs
 func encodeRunsPayload(cloud, suite string) ([]byte, error) {
 	payload := RunsPayload{
 		RunsCloud{cloud},
@@ -130,18 +133,23 @@ type Status struct {
 	End     *time.Time    `json:"ended_at"`
 }
 
+// String is the string formatting for Status
+func (status *Status) String() string {
+	return fmt.Sprintf("state: %s, summary: %+v\r", status.State, status.Summary)
+}
+
+// decodeStatus decodes status response
 func decodeStatus(resp *http.Response) (*Status, error) {
 	dec := json.NewDecoder(resp.Body)
 	var reply Status
 	if err := dec.Decode(&reply); err != nil {
 		return nil, fmt.Errorf("can't decode runs reply - %s", err)
 	}
-
 	return &reply, nil
 }
 
-// executeRun dispatches a run of <suite> on <cloud>, returns run id
-func executeRun(cloud, suite string) (*Status, error) {
+// startRun dispatches a run of <suite> on <cloud>, returns run id
+func startRun(cloud, suite string) (*Status, error) {
 	payload, err := encodeRunsPayload(cloud, suite)
 	if err != nil {
 		return nil, fmt.Errorf("can't encode runs payload - %s", err)
@@ -193,7 +201,7 @@ func main() {
 		die("unknown cloud %s (%s)", *domain, *region)
 	}
 
-	status, err := executeRun(cloudId, *suite)
+	status, err := startRun(cloudId, *suite)
 	if err != nil {
 		die("can't run - %s", err)
 	}
@@ -201,13 +209,14 @@ func main() {
 
 	for {
 		status, err = runStatus(status.Id)
-		fmt.Printf("state: %s, summary: %+v\r", status.State, status.Summary)
+		fmt.Printf("%s\r", status)
 		if status.End != nil {
 			break
 		}
 		time.Sleep(time.Second)
 	}
 
+	fmt.Printf("%s\n", status) // Print final status
 	duration := status.End.Sub(*status.Start).Seconds()
 	fmt.Printf("run %s ended at %s (started at %s - took %.1fsec)\n", status.Id, *status.End, *status.Start, duration)
 	if status.Summary.Failed > 0 {
