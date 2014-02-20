@@ -111,6 +111,29 @@ func encodeRunsPayload(cloud, suite string) ([]byte, error) {
 	return json.Marshal(payload)
 }
 
+// run dispatches a run of <suite> on <cloud>, returns run id
+func run(cloud, suite string) (string, error) {
+	payload, err := encodeRunsPayload(cloud, suite)
+	if err != nil {
+		return "", fmt.Errorf("can't encode runs payload - %s", err)
+	}
+	resp, err := apiCall("POST", "/runs", payload)
+	if err != nil {
+		return "", fmt.Errorf("can't dispatch new run - %s", err)
+	}
+	defer resp.Body.Close()
+
+	dec := json.NewDecoder(resp.Body)
+	var reply struct {
+		Id string `json:"id"`
+	}
+	if err = dec.Decode(&reply); err != nil {
+		return "", fmt.Errorf("can't decode runs reply - %s", err)
+	}
+
+	return reply.Id, nil
+}
+
 func main() {
 	flag.Parse()
 
@@ -134,20 +157,14 @@ func main() {
 		die("missing domain or region")
 	}
 
-	id := findClouldId(*domain, *region, clouds)
-	if len(id) == 0 {
+	cloudId := findClouldId(*domain, *region, clouds)
+	if len(cloudId) == 0 {
 		die("unknown cloud %s (%s)", *domain, *region)
 	}
 
-	payload, err := encodeRunsPayload(id, *suite)
+	runId, err := run(cloudId, *suite)
 	if err != nil {
-		die("can't encode runs payload - %s", err)
+		die("can't run - %s", err)
 	}
-	resp, err := apiCall("POST", "/runs", payload)
-	if err != nil {
-		die("can't dispatch new run - %s", err)
-	}
-	defer resp.Body.Close()
-	io.Copy(os.Stdout, resp.Body)
-
+	fmt.Println(runId)
 }
