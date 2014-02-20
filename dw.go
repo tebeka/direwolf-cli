@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 const (
@@ -111,27 +112,57 @@ func encodeRunsPayload(cloud, suite string) ([]byte, error) {
 	return json.Marshal(payload)
 }
 
-// run dispatches a run of <suite> on <cloud>, returns run id
-func run(cloud, suite string) (string, error) {
+// StatusSummary is the "summary" inner struct in Status
+type StatusSummary struct {
+	Passed  int
+	Failed  int
+	Skipped int
+	Running int
+	Pending int
+}
+
+// Status is the reply from POST to /runs or GET /runs/<id>
+type Status struct {
+	Id      string        `json:"id"`
+	State   string        `json:"state"`
+	Summary StatusSummary `json:"summary"`
+	Start   *time.Time    `json:"started_at"`
+	End     *time.Time    `json:"ended_at"`
+}
+
+func decodeStatus(resp *http.Response) (*Status, error) {
+	dec := json.NewDecoder(resp.Body)
+	var reply Status
+	if err := dec.Decode(&reply); err != nil {
+		return nil, fmt.Errorf("can't decode runs reply - %s", err)
+	}
+
+	return &reply, nil
+}
+
+// executeRun dispatches a run of <suite> on <cloud>, returns run id
+func executeRun(cloud, suite string) (*Status, error) {
 	payload, err := encodeRunsPayload(cloud, suite)
 	if err != nil {
-		return "", fmt.Errorf("can't encode runs payload - %s", err)
+		return nil, fmt.Errorf("can't encode runs payload - %s", err)
 	}
 	resp, err := apiCall("POST", "/runs", payload)
 	if err != nil {
-		return "", fmt.Errorf("can't dispatch new run - %s", err)
+		return nil, fmt.Errorf("can't dispatch new run - %s", err)
 	}
 	defer resp.Body.Close()
+	return decodeStatus(resp)
+}
 
-	dec := json.NewDecoder(resp.Body)
-	var reply struct {
-		Id string `json:"id"`
+// runStatus get the run status of run <id>
+func runStatus(id string) (*Status, error) {
+	url := fmt.Sprintf("/runs/%s", id)
+	resp, err := apiCall("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("can't get %s status - %s", id, err)
 	}
-	if err = dec.Decode(&reply); err != nil {
-		return "", fmt.Errorf("can't decode runs reply - %s", err)
-	}
-
-	return reply.Id, nil
+	defer resp.Body.Close()
+	return decodeStatus(resp)
 }
 
 func main() {
@@ -162,9 +193,24 @@ func main() {
 		die("unknown cloud %s (%s)", *domain, *region)
 	}
 
-	runId, err := run(cloudId, *suite)
+	status, err := executeRun(cloudId, *suite)
 	if err != nil {
 		die("can't run - %s", err)
 	}
-	fmt.Println(runId)
+	fmt.Printf("run id: %s\n", status.Id)
+
+	for {
+		status, err = runStatus(status.Id)
+		fmt.Printf("state: %s, summary: %+v\n", status.State, status.Summary)
+		if status.End != nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	duration := status.End.Sub(*status.Start).Seconds()
+	fmt.Printf("run %s ended at %s (started at %s - took %.1fsec)\n", status.Id, *status.End, *status.Start, duration)
+	if status.Summary.Failed > 0 {
+		os.Exit(1)
+	}
 }
