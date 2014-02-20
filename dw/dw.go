@@ -81,8 +81,8 @@ func getClouds() ([]Cloud, error) {
 	return reply, nil
 }
 
-// findClouldId finds the matching cloud id for domain and region
-func findClouldId(domain, region string, clouds []Cloud) string {
+// findCloudId finds the matching cloud id for domain and region
+func findCloudId(domain, region string, clouds []Cloud) string {
 	for _, cloud := range clouds {
 		if (cloud.Domain == domain) && (cloud.Region == region) {
 			return cloud.Id
@@ -173,6 +173,25 @@ func runStatus(id string) (*Status, error) {
 	return decodeStatus(resp)
 }
 
+func waitForRun(status *Status, print bool) (*Status, error) {
+	for {
+		status, err := runStatus(status.Id)
+		if err != nil {
+			return nil, err
+		}
+
+		if print {
+			fmt.Printf("%s\r", status)
+		}
+
+		if status.End != nil {
+			return status, nil
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -196,7 +215,7 @@ func main() {
 		die("missing domain or region")
 	}
 
-	cloudId := findClouldId(*domain, *region, clouds)
+	cloudId := findCloudId(*domain, *region, clouds)
 	if len(cloudId) == 0 {
 		die("unknown cloud %s (%s)", *domain, *region)
 	}
@@ -207,13 +226,9 @@ func main() {
 	}
 	fmt.Printf("run id: %s\n", status.Id)
 
-	for {
-		status, err = runStatus(status.Id)
-		fmt.Printf("%s\r", status)
-		if status.End != nil {
-			break
-		}
-		time.Sleep(time.Second)
+	status, err = waitForRun(status, true)
+	if err != nil {
+		die("error waiting for %s - %s", status.Id, err)
 	}
 
 	fmt.Printf("%s\n", status) // Print final status
