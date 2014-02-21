@@ -69,6 +69,7 @@ func getClouds() ([]Cloud, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	// FIXME: Move to apiCall
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad return code: %d", resp.StatusCode)
 	}

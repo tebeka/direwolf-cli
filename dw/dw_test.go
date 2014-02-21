@@ -97,6 +97,7 @@ func Test_getClouds(t *testing.T) {
 
 	found := false
 	for _, cloud := range clouds {
+		// FIXME: Use findCloudId
 		if (cloud.Domain == testCloud) && (cloud.Region == "us") {
 			found = true
 			break
@@ -108,6 +109,7 @@ func Test_getClouds(t *testing.T) {
 	}
 }
 
+// FIXME: Table driven
 func test_findCloudId(t *testing.T) {
 	clouds, err := getClouds()
 	if err != nil {
