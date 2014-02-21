@@ -95,17 +95,17 @@ func Test_getClouds(t *testing.T) {
 		t.Fatalf("no clouds found")
 	}
 
-	found := false
-	for _, cloud := range clouds {
-		// FIXME: Use findCloudId
-		if (cloud.Domain == testCloud) && (cloud.Region == "us") {
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	id := findCloudId(testCloud, "us", clouds)
+	if id == "" {
 		t.Fatalf("can't find %s cloud", testCloud)
+	}
+}
+
+func checkFindId(cloud, region string, clouds []Cloud, expected bool, t *testing.T) {
+	t.Logf("Testing findCloudId %s:%s [%s]", cloud, region, expected)
+	found := len(findCloudId(cloud, region, clouds)) != 0
+	if found != expected {
+		t.Fatalf("error in %s:%s", cloud, region)
 	}
 }
 
@@ -116,19 +116,18 @@ func test_findCloudId(t *testing.T) {
 		t.Fatalf("can't get clouds - %s", err)
 	}
 
-	id := findCloudId(testCloud, "us", clouds)
-	if len(id) == 0 {
-		t.Fatalf("can't find cloud %s- %s", testCloud, err)
+	var cases = []struct {
+		cloud    string
+		region   string
+		expected bool
+	}{
+		{testCloud, "us", true},
+		{testCloud, "ussr", false},
+		{testCloud + "not-there", "us", false},
 	}
 
-	id = findCloudId(testCloud, "ussr", clouds)
-	if len(id) != 0 {
-		t.Fatalf("found cloud in bad region")
-	}
-
-	id = findCloudId(testCloud+"no-there", "us", clouds)
-	if len(id) != 0 {
-		t.Fatalf("found non existing cloud")
+	for _, data := range cases {
+		checkFindId(data.cloud, data.region, clouds, data.expected, t)
 	}
 }
 

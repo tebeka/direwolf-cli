@@ -17,7 +17,7 @@ const (
 
 // Command line options
 var direwolfHost = flag.String("direwolfHost", defaultHost, "direwolf host")
-var apiKey = flag.String("apiKey", os.Getenv("DW_API_KEY"), "api key to use (or DW_API_KEY)")
+var apiKey = flag.String("apiKey", "", "api key to use (or DW_API_KEY)")
 var listClouds = flag.Bool("listClouds", false, "list clouds and exit")
 var domain = flag.String("domain", "", "cloud domain")
 var region = flag.String("region", "", "cloud region")
@@ -197,6 +197,9 @@ func main() {
 	flag.Parse()
 
 	if len(*apiKey) == 0 {
+		*apiKey = os.Getenv("DW_API_KEY")
+	}
+	if len(*apiKey) == 0 {
 		die("no api key")
 	}
 
@@ -234,7 +237,8 @@ func main() {
 
 	fmt.Printf("%s\n", status) // Print final status
 	duration := status.End.Sub(*status.Start).Seconds()
-	fmt.Printf("run %s ended at %s (started at %s - took %.1fsec)\n", status.Id, *status.End, *status.Start, duration)
+	fmt.Printf("run %s ended at %s (started at %s - took %.1fsec)\n",
+		status.Id, *status.End, *status.Start, duration)
 	if status.Summary.Failed > 0 {
 		os.Exit(1)
 	}
